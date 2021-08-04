@@ -2,26 +2,60 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
+import "./StoreFront.sol";
 
 contract BookStore is ERC1155{
   
-  uint256 private _currentBookVersionId;
-  
-  mapping (uint256 => uint256) private _bookVersionPrices;// 
-  
+    uint256 private _currentBookVersionId;
+   
+    mapping (uint256=> BookVersion) private _bookVersions;
 
-  constructor() ERC1155("https://example.com/api/{id}.json") {
-      _currentBookVersionId = 1;
-  }
+    StoreFront private _storeFront;
 
-  // NOTE: Account for number of decimals on various whitelisted currencies (!)
-  function puslish(uint256 _quantity, uint256 _price, address _currency) public {
-      _mint(msg.sender, _currentBookVersionId, _quantity, "");
-      _bookVersionPrices[_currentBookVersionId] = _price;
-      _currentBookVersionId++;
-  }
-  
-  function bookVersionPrice(uint256 _bookVersionId) public view returns(uint256){
-      return _bookVersionPrices[_bookVersionId];
-  }
+    struct BookVersion {
+        uint256 price;
+        address currency;
+        address author;
+    }
+
+    address private _owner;
+
+    constructor() ERC1155("https://example.com/api/{id}.json") {
+        _currentBookVersionId = 1;
+        _owner = msg.sender;
+    }
+
+    function setStoreFront(address __storeFrontAddress) public {
+        require(msg.sender == _owner, "BookStore: Only contract owner can set storeFront");
+        _storeFront = StoreFront(__storeFrontAddress);
+    }
+
+
+    // NOTE: Account for number of decimals on various whitelisted currencies (!)
+    function puslish(uint256 _quantity, uint256 _price, address _currency) public {
+        _mint(msg.sender, _currentBookVersionId, _quantity, "");
+        
+        _bookVersions[_currentBookVersionId] = BookVersion(_price, _currency, msg.sender);
+        _currentBookVersionId += 1;
+    }
+      
+    function transferFromAuthor(address _buyer, uint256 _bookVersionId) public {
+        require(msg.sender == address(_storeFront),"Method can only be called by Store Front contract.");
+        BookVersion memory bookVersion = _bookVersions[_bookVersionId];
+        safeTransferFrom(bookVersion.author, _buyer, _bookVersionId, 1, "");
+    }
+
+    function bookVersionPrice(uint256 _bookVersionId) public view returns(uint256){
+        return _bookVersions[_bookVersionId].price;
+    }
+
+    function bookVersionCurrency(uint256 _bookVersionId) public view returns(address){
+        return _bookVersions[_bookVersionId].currency;
+    }
+
+    function bookVersionAuthor(uint256 _bookVersionId) public view returns(address){
+        return _bookVersions[_bookVersionId].author;
+    }
+
+    //TODO: create setStorefront method that is onlyOwner
 }
